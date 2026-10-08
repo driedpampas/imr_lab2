@@ -562,7 +562,7 @@ namespace Handball.EditorTools
             var root = Group("How To Play Sign").transform;
             root.position = new Vector3(-1.35f, 0f, 2.1f);
             root.rotation = Quaternion.Euler(0f, -28f, 0f);
-            Prim(PrimitiveType.Cylinder, "Post", root, new Vector3(0f, 0.55f, 0.02f), new Vector3(0.06f, 0.55f, 0.06f), s_Wood);
+            Prim(PrimitiveType.Cylinder, "Post", root, new Vector3(0f, 0.56f, 0.14f), new Vector3(0.06f, 0.56f, 0.06f), s_Wood);
 
             var canvasGo = new GameObject("Canvas", typeof(RectTransform));
             canvasGo.transform.SetParent(root, false);
@@ -571,17 +571,18 @@ namespace Handball.EditorTools
             var canvas = canvasGo.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.WorldSpace;
             var rt = (RectTransform)canvasGo.transform;
-            rt.sizeDelta = new Vector2(700, 420);
+            rt.sizeDelta = new Vector2(720, 480);
             rt.localScale = Vector3.one * 0.0012f;
             canvasGo.AddComponent<CanvasScaler>().dynamicPixelsPerUnit = 4f;
             var fontMat = OutlinedFontMaterial();
-            UiImage(rt, "Border", Vector2.zero, new Vector2(700, 420), Color.white);
-            UiImage(rt, "Panel", Vector2.zero, new Vector2(676, 396), new Color(0.47f, 0.8f, 0.72f));
-            UiText(rt, "Title", "HOW TO PLAY", 54, new Vector2(0, 150), new Vector2(660, 70), Color.white, fontMat);
+            UiImage(rt, "Border", Vector2.zero, new Vector2(720, 480), Color.white);
+            UiImage(rt, "Panel", Vector2.zero, new Vector2(696, 456), new Color(0.47f, 0.8f, 0.72f));
+            UiText(rt, "Title", "HOW TO PLAY", 54, new Vector2(0, 182), new Vector2(680, 70), Color.white, fontMat);
             var body = UiText(rt, "Body",
-                "Grab a ball with GRIP (either hand)\nand throw it past Unity-chan!\n\n<size=24>Simulator: hold Right Mouse to turn, point at a ball,\nhold G to grab, look where you want to shoot, release G.\nLeft hand: hold Shift too (let go of G before Shift).</size>",
-                32, new Vector2(0, -30), new Vector2(660, 300), Color.white, fontMat);
+                "Grab a ball with GRIP (either hand)\nand throw it past Unity-chan!\n\n<size=23>Simulator: hold Right Mouse to turn, point at a ball,\nhold G to grab, look where you want to shoot,\nthen release G to throw.\nLeft hand: hold Shift too (let go of G before Shift).</size>",
+                31, new Vector2(0, -5), new Vector2(680, 300), Color.white, fontMat);
             body.textWrappingMode = TextWrappingModes.Normal;
+            UiText(rt, "Credits", "Unity-chan © Unity Technologies Japan/UCL  •  Sounds: Kenney.nl (CC0)", 18, new Vector2(0, -205), new Vector2(680, 28), new Color(0.1f, 0.32f, 0.3f), OutlinedFontMaterial());
         }
 
         // ------------------------------------------------------------------ effects

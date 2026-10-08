@@ -17,6 +17,7 @@ namespace Handball.EditorTools
             ("face", new Vector3(0f, 1.32f, 5.6f), new Vector3(0f, 1.3f, 6.3f), 30f),
             ("rack_right", new Vector3(0f, 1.55f, -0.35f), new Vector3(0.7f, 1.4f, -0.1f), 70f),
             ("behind", new Vector3(-3f, 2.5f, 13f), new Vector3(0f, 1.2f, 5f), 60f),
+            ("sign", new Vector3(0f, 1.55f, -0.35f), new Vector3(-1.35f, 1.35f, 2.1f), 24f),
         };
 
         [MenuItem("Handball/Debug/Capture Shots")]

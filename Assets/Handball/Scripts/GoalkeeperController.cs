@@ -32,8 +32,11 @@ namespace Handball
         public float perceptionError = 0.18f;
         [Range(0f, 1f)] public float wrongGuessChance = 0.08f;
         [Tooltip("How fast her hands can travel towards the ball (m/s).")]
-        public float handSpeed = 3.3f;
+        public float handSpeed = 3.35f;
         public float windup = 0.05f;
+        [Tooltip("Chance she reads a shot early and launches extra fast, so even a perfect corner can be saved.")]
+        [Range(0f, 1f)] public float superSaveChance = 0.2f;
+        public float superSaveBoost = 1.4f;
 
         [Header("Body")]
         public float restHandHeight = 1.15f;
@@ -48,6 +51,8 @@ namespace Handball
         [Header("Recovery")]
         [Tooltip("Seconds she keeps flying (scripted) after reaching the ball before going limp.")]
         public float ragdollHold = 0.06f;
+        [Tooltip("Sideways speed added when she goes limp, so the dive ends in a proper flop.")]
+        public float flopSpeed = 2.4f;
         public float downTime = 2.2f;
         public float getUpTime = 0.85f;
         public float returnSpeed = 2.4f;
@@ -72,6 +77,8 @@ namespace Handball
         float m_Crouch, m_Jump;
         HandballBall m_TrackedBall;
         bool m_PushedOff;
+        HandballBall[] m_AllBalls;
+        float m_NextTaunt = 2f;
         bool m_LastShotSaved;
 
         // IK
@@ -128,6 +135,8 @@ namespace Handball
                 Game.ShotResolved += OnShotResolved;
             }
             m_LookPoint = transform.position + transform.forward * 5f + Vector3.up * 1.3f;
+            m_AllBalls = FindObjectsByType<HandballBall>(FindObjectsSortMode.None);
+            m_NextTaunt = Time.time + 1.5f;
         }
 
         void OnDestroy()
@@ -177,10 +186,16 @@ namespace Handball
             if (Random.value < wrongGuessChance) target.x = -target.x;
 
             float reaction = reactionTime + Random.value * reactionJitter;
-            PlanMove(target, Time.time + reaction, Time.time + tPlane);
+            float speed = handSpeed;
+            if (Random.value < superSaveChance)
+            {
+                reaction *= 0.65f;
+                speed *= superSaveBoost;
+            }
+            PlanMove(target, Time.time + reaction, Time.time + tPlane, speed);
         }
 
-        void PlanMove(Vector2 desired, float startTime, float ballArrival)
+        void PlanMove(Vector2 desired, float startTime, float ballArrival, float speed)
         {
             m_PlanOrigin = transform.position;
             m_PushedOff = false;
@@ -188,12 +203,12 @@ namespace Handball
             float available = Mathf.Max(0f, ballArrival - startTime - windup);
             var toTarget = desired - rest;
             float needed = toTarget.magnitude;
-            float reach = Mathf.Min(needed, handSpeed * available);
+            float reach = Mathf.Min(needed, speed * available);
             var hand = needed > 1e-3f ? rest + toTarget * (reach / needed) : rest;
             m_HandTarget = hand;
 
             m_MoveStart = startTime + windup;
-            float travelTime = Mathf.Max(0.16f, reach / handSpeed);
+            float travelTime = Mathf.Max(0.16f, reach / speed);
             // Time the save to meet the ball rather than arriving early and falling past it.
             m_Arrive = Mathf.Max(m_MoveStart + travelTime, ballArrival - 0.03f);
             m_Crouch = 0f;
@@ -291,6 +306,7 @@ namespace Handball
             {
                 case State.Idle:
                     m_HandWeight = Mathf.MoveTowards(m_HandWeight, 0f, Time.fixedDeltaTime * 4f);
+                    TickTaunts(now);
                     break;
 
                 case State.Blocking:
@@ -313,6 +329,20 @@ namespace Handball
                     if (now >= m_PlanEnd) SetState(State.Idle);
                     break;
             }
+        }
+
+        void TickTaunts(float now)
+        {
+            if (!emote || now < m_NextTaunt) return;
+            bool first = m_AllBalls != null && Game && Game.Shots == 0 && now < 5f;
+            bool holding = m_AllBalls != null && System.Array.Exists(m_AllBalls, b => b && b.IsHeld);
+            if (first)
+                emote.Show("Let's play!", KeeperEmote.Mood.Happy);
+            else if (holding)
+                emote.Show(Pick("Come on~!", "Try me!", "I'm ready!", "Hehe~", "Bring it!"), KeeperEmote.Mood.Neutral);
+            else
+                return;
+            m_NextTaunt = now + Random.Range(6f, 10f);
         }
 
         void UpdateLookTarget()
@@ -412,6 +442,8 @@ namespace Handball
             // Freeze the animator on the current pose and let physics take over.
             animator.enabled = false;
             ragdoll.SetRagdoll(true);
+            var right = HomeRotation * Vector3.right;
+            ragdoll.AddVelocity(right * (Mathf.Sign(m_DiveDir.x) * flopSpeed) + Vector3.up * 0.6f);
             m_DownSince = Time.time;
             m_Settled = false;
             SetState(State.Down);

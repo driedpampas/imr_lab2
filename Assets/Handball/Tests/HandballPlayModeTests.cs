@@ -93,6 +93,7 @@ namespace Handball.Tests
             m_Keeper.perceptionError = 0f;
             m_Keeper.reactionJitter = 0f;
             m_Keeper.celebrateChance = 0f;
+            m_Keeper.superSaveChance = 0f;
         }
 
         static void Capture(string name, Vector3 pos, Vector3 target, float fov = 50f)
@@ -322,6 +323,28 @@ namespace Handball.Tests
             Debug.Log("BLOCK RESULT " + shot.result);
         }
 
+        [UnityTest, Explicit]
+        public IEnumerator Debug_CaptureDiveSequences()
+        {
+            MakeKeeperDeterministic();
+            foreach (var (name, target) in new[] { ("dive_high", new Vector2(-1.0f, 1.6f)), ("dive_low", new Vector2(1.1f, 0.35f)) })
+            {
+                m_Keeper.ResetToHome();
+                foreach (var b in m_Balls) b.PlaceOnRack(false);
+                yield return new WaitForSeconds(0.5f);
+                Time.captureFramerate = 30;
+                var shot = Shoot(target);
+                for (int i = 0; i < 36; i++)
+                {
+                    yield return null;
+                    if (i % 3 == 0) Capture($"{name}_{i / 3:00}", new Vector3(0f, 1.2f, 2.6f), new Vector3(0f, 0.9f, 6.6f), 45f);
+                }
+                Time.captureFramerate = 0;
+                yield return WaitResolved(shot);
+                Debug.Log($"DIVE {name} -> {shot.result}");
+            }
+        }
+
         /// <summary>
         /// Difficulty check: random shots spread over the whole goal mouth from the 7 m line,
         /// keeper reset before each. Logs the goal rate per zone; the overall rate must be "fair".
@@ -331,9 +354,9 @@ namespace Handball.Tests
         public IEnumerator Balance_RandomShotsAreNeitherTooEasyNorTooHard()
         {
             Random.InitState(1234);
-            const int shots = 60;
+            const int shots = 80;
             int goals = 0, saves = 0, misses = 0;
-            var zones = new int[3, 2]; // [left/centre/right, goal/save]
+            int cornerShots = 0, cornerGoals = 0, centreShots = 0, centreSaves = 0;
             var log = new StringBuilder();
             Time.timeScale = 2f;
             for (int i = 0; i < shots; i++)
@@ -341,23 +364,29 @@ namespace Handball.Tests
                 m_Keeper.ResetToHome();
                 foreach (var b in m_Balls) b.PlaceOnRack(false);
                 yield return new WaitForSeconds(0.3f);
-                var target = new Vector2(Random.Range(-1.4f, 1.4f), Random.Range(0.15f, 1.85f));
+                // Half the shots aimed at the outer thirds (what a player aiming with the reticle does), half anywhere.
+                float x = i % 2 == 0 ? Random.Range(-1.4f, 1.4f) : Random.Range(0.8f, 1.4f) * (Random.value < 0.5f ? -1f : 1f);
+                var target = new Vector2(x, Random.Range(0.15f, 1.85f));
                 var shot = Shoot(target, Random.Range(11f, 14f), i % 2 == 0);
                 yield return WaitResolved(shot);
-                int zone = target.x < -0.5f ? 0 : (target.x > 0.5f ? 2 : 1);
-                if (shot.result == ShotResult.Goal) { goals++; zones[zone, 0]++; }
-                else if (shot.result == ShotResult.Save) { saves++; zones[zone, 1]++; }
+                if (shot.result == ShotResult.Goal) goals++;
+                else if (shot.result == ShotResult.Save) saves++;
                 else misses++;
+                if (Mathf.Abs(target.x) > 0.8f) { cornerShots++; if (shot.result == ShotResult.Goal) cornerGoals++; }
+                if (Mathf.Abs(target.x) < 0.4f) { centreShots++; if (shot.result == ShotResult.Save) centreSaves++; }
                 log.AppendLine($"shot {i,2} target=({target.x,5:F2},{target.y,4:F2}) -> {shot.result}");
             }
             Time.timeScale = 1f;
             float rate = goals / (float)shots;
-            log.Insert(0, $"BALANCE goals={goals} saves={saves} misses={misses} rate={rate:P0} | left {zones[0, 0]}/{zones[0, 1]} centre {zones[1, 0]}/{zones[1, 1]} right {zones[2, 0]}/{zones[2, 1]} (goal/save)\n");
+            float cornerRate = cornerGoals / (float)Mathf.Max(1, cornerShots);
+            float centreSaveRate = centreSaves / (float)Mathf.Max(1, centreShots);
+            log.Insert(0, $"BALANCE goals={goals} saves={saves} misses={misses} rate={rate:P0} | outer-third shots scored {cornerGoals}/{cornerShots} ({cornerRate:P0}) | centre shots saved {centreSaves}/{centreShots} ({centreSaveRate:P0})\n");
             Directory.CreateDirectory("Logs");
             File.WriteAllText("Logs/balance.txt", log.ToString());
             Debug.Log(log.ToString());
-            Assert.That(rate, Is.InRange(0.35f, 0.65f), "Goal rate for random on-target shots should be balanced");
-            Assert.Greater(zones[1, 1], zones[1, 0], "Central shots should mostly be saved");
+            Assert.That(cornerRate, Is.InRange(0.45f, 0.85f), "Well-placed shots should usually, but not always, beat her");
+            Assert.Greater(centreSaveRate, 0.7f, "Shots straight at Unity-chan should mostly be saved");
+            Assert.That(rate, Is.InRange(0.3f, 0.75f), "Overall goal rate should be balanced");
         }
     }
 }

@@ -64,10 +64,10 @@ namespace Handball
             reticle.position = target - goal.forward * 0.02f;
             reticle.rotation = Quaternion.LookRotation(goal.forward);
             float pulse = 1f + 0.12f * Mathf.Sin(Time.time * 8f);
-            reticle.localScale = Vector3.one * (0.32f * pulse);
+            reticle.localScale = Vector3.one * (0.42f * pulse);
 
             var color = onTarget ? onTargetColor : offTargetColor;
-            line.startColor = new Color(color.r, color.g, color.b, 0.15f);
+            line.startColor = new Color(color.r, color.g, color.b, 0.55f);
             line.endColor = color;
             if (reticleRenderer)
             {

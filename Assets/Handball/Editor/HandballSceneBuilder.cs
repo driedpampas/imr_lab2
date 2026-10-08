@@ -178,6 +178,7 @@ namespace Handball.EditorTools
             s_Bubble = HandballArt.FxMaterial("M_Bubble", AssetDatabase.LoadAssetAtPath<Texture2D>(HandballArt.Root + "/Textures/T_RoundedRect.png"), Color.white);
             s_Confetti = HandballArt.FxMaterial("M_Confetti", null, Color.white, true);
             s_Trajectory = HandballArt.FxMaterial("M_Trajectory", dot, Color.white);
+            s_Trajectory.SetTextureScale("_BaseMap", new Vector2(9f, 1f)); // LineTextureMode.Tile repeats per metre
             s_Reticle = HandballArt.FxMaterial("M_Reticle", ring, Color.white);
             s_Puff = HandballArt.FxMaterial("M_Puff", soft, new Color(1f, 1f, 1f, 0.8f));
 
@@ -371,6 +372,14 @@ namespace Handball.EditorTools
             var camData = camera.GetComponent<UniversalAdditionalCameraData>() ?? camera.gameObject.AddComponent<UniversalAdditionalCameraData>();
             camData.renderPostProcessing = true;
             camData.antialiasing = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
+            // Edits made from code to a prefab instance must be recorded or they are lost when the scene is saved.
+            // Without a tracking subsystem (simulator) the rig keeps the offset object's authored height, so move it too.
+            var offsetObject = origin.CameraFloorOffsetObject.transform;
+            offsetObject.localPosition = new Vector3(offsetObject.localPosition.x, origin.CameraYOffset, offsetObject.localPosition.z);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(offsetObject);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(origin);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(camera);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(camData);
 
             foreach (var name in new[] { "Left Controller", "Right Controller" })
             {
@@ -570,7 +579,7 @@ namespace Handball.EditorTools
             UiImage(rt, "Panel", Vector2.zero, new Vector2(676, 396), new Color(0.47f, 0.8f, 0.72f));
             UiText(rt, "Title", "HOW TO PLAY", 54, new Vector2(0, 150), new Vector2(660, 70), Color.white, fontMat);
             var body = UiText(rt, "Body",
-                "Grab a ball with GRIP (either hand)\nand throw it past Unity-chan!\n\n<size=26>Simulator: hold Right Mouse to turn,\npoint at a ball, hold G to grab,\nlook where you want to shoot, release G.</size>",
+                "Grab a ball with GRIP (either hand)\nand throw it past Unity-chan!\n\n<size=24>Simulator: hold Right Mouse to turn, point at a ball,\nhold G to grab, look where you want to shoot, release G.\nLeft hand: hold Shift too (let go of G before Shift).</size>",
                 32, new Vector2(0, -30), new Vector2(660, 300), Color.white, fontMat);
             body.textWrappingMode = TextWrappingModes.Normal;
         }
@@ -771,7 +780,8 @@ namespace Handball.EditorTools
         static void CreateBall(BallRack rack, int slot, int index)
         {
             var ball = Prim(PrimitiveType.Sphere, "Handball " + index, null, rack.SlotPosition(slot), Vector3.one * (BallRadius * 2f), s_Ball, true);
-            ball.layer = HandballLayers.Ball;
+            // Default layer: the starter Near-Far interactors only cast against Default/UI.
+            ball.layer = 0;
             ball.GetComponent<SphereCollider>().sharedMaterial = s_BallPhys;
             var rb = ball.AddComponent<Rigidbody>();
             rb.mass = 0.45f;
@@ -791,6 +801,11 @@ namespace Handball.EditorTools
             grab.useDynamicAttach = false;
             grab.attachEaseInTime = 0.08f;
             grab.farAttachMode = InteractableFarAttachMode.Near;
+            // Hold the ball by its upper surface so it hangs under the hand instead of filling the view.
+            var gripPoint = new GameObject("Grip Point").transform;
+            gripPoint.SetParent(ball.transform, false);
+            gripPoint.localPosition = new Vector3(0f, 0.6f, -0.2f);
+            grab.attachTransform = gripPoint;
 
             var trailGo = new GameObject("Trail");
             trailGo.transform.SetParent(ball.transform, false);
@@ -821,7 +836,7 @@ namespace Handball.EditorTools
             var line = go.AddComponent<LineRenderer>();
             line.sharedMaterial = s_Trajectory;
             line.textureMode = LineTextureMode.Tile;
-            line.widthMultiplier = 0.045f;
+            line.widthMultiplier = 0.07f;
             line.numCapVertices = 0;
             line.shadowCastingMode = ShadowCastingMode.Off;
             line.alignment = LineAlignment.View;

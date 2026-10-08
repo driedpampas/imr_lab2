@@ -25,7 +25,7 @@ Material:
     m_TexEnvs:
     - _BaseMap:
         m_Texture: {fileID: 2800000, guid: dcfef67a7e195c34e94869e5d6336672, type: 3}
-        m_Scale: {x: 1, y: 1}
+        m_Scale: {x: 9, y: 1}
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:

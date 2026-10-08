@@ -172,6 +172,12 @@ namespace Handball
             }
         }
 
+        public void AddVelocity(Vector3 velocity)
+        {
+            foreach (var p in parts)
+                if (!p.body.isKinematic) p.body.linearVelocity += velocity;
+        }
+
         /// <summary>Remembers bone poses so momentum can be handed over when going limp.</summary>
         public void TrackPose()
         {

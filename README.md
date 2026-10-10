@@ -8,6 +8,8 @@ couple of seconds (your chance to score again!) and springs back up.
 
 Scene: `Assets/Handball/Scenes/Handball.unity` (first scene in Build Settings).
 
+**Demo video:** [`video.mp4`](video.mp4) (recorded in the Editor with the XR Interaction Simulator).
+
 ## Playing in the Editor (XR Interaction Simulator, no headset)
 
 Press **Play**. The XR Interaction Simulator spawns automatically (Editor only). Click inside

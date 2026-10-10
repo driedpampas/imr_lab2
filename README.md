@@ -10,6 +10,22 @@ Scene: `Assets/Handball/Scenes/Handball.unity` (first scene in Build Settings).
 
 **Demo video:** [`video.mp4`](video.mp4) (recorded in the Editor with the XR Interaction Simulator).
 
+## ⚠️ Important: two throwing modes
+
+The game supports **both** a real physical throw and a simulator-friendly throw. It picks the right one
+automatically (`HandballThrowAssist`, on each controller):
+
+| | **On a VR headset** | **In the XR Interaction Simulator** (no headset) |
+| --- | --- | --- |
+| Grab | grip button, via XRI Near-Far **Interactor** + XR Grab **Interactable** | **G** (right hand) / **Shift + G** (left hand), same Interactor + Interactable |
+| Throw | **Real hand velocity**: on release, `XRGrabInteractable` (throw-on-detach) measures how fast your hand was moving and gives the ball that velocity. A light assist only scales it by 1.15× and bends it at most 7° towards the goal. Throw soft and it falls short; throw sideways and it goes sideways. | **Point and throw**: the simulator cannot swing a controller (the mouse only rotates it and keyboard movement is ~0.2 m/s), so a physical throw would just drop the ball. Releasing G launches the ball on a ballistic arc (~12.5 m/s, a real penalty-throw speed) towards where you are looking, shown by a dotted arc and a target ring. |
+
+> **The demo video uses the simulator mode, because no headset was available for recording.**
+> The headset mode is implemented through XRI's standard throw-on-detach and its official aim-assist hook
+> (`IXRAimAssist`), and its velocity handling is covered by an automated test, but it has not been tried on
+> physical hardware. To force a mode, set **Mode** on the `HandballThrowAssist` component of
+> *Left/Right Controller* (`Auto` / `Physical` / `PointAndThrow`).
+
 ## Playing in the Editor (XR Interaction Simulator, no headset)
 
 Press **Play**. The XR Interaction Simulator spawns automatically (Editor only). Click inside
@@ -25,10 +41,8 @@ the Game view so it receives the keyboard and mouse.
 | Aim | keep G held, look where you want the ball to go: a dotted arc and a ring on the goal show the throw (the ring turns yellow when the shot is on target) |
 | Throw | release **G** (left hand: release **G** first, *then* Shift, because the simulator only routes input to the left hand while Shift is down) |
 
-In the simulator, controllers can't be swung fast enough to throw, so a release launches the
-ball on a ballistic arc (~12.5 m/s, like a real penalty throw) towards where you are looking.
-On a real headset the throw is the true physical hand velocity (slightly scaled), nudged at most
-7° towards the goal.
+In the simulator a release launches the ball towards where you are looking; on a headset the throw
+uses your real hand velocity (see **Two throwing modes** above).
 
 ## Playing on a headset
 

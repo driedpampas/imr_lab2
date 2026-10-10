@@ -40,6 +40,11 @@ namespace Handball
         public float shotTimeout = 3.5f;
         public float minShotSpeed = 2.0f;
 
+        [Header("Performance")]
+        [Tooltip("Frame-rate cap when no headset is active (Editor / XR simulator). Leaves GPU time for screen recorders " +
+                 "on laptops with integrated graphics. 0 = uncapped. Headsets pace themselves and ignore this.")]
+        public int simulatorFrameRateCap = 30;
+
         [Header("Feedback")]
         public ScoreboardUI scoreboard;
         public ConfettiBurst[] goalConfetti;
@@ -61,6 +66,11 @@ namespace Handball
         void Awake()
         {
             Instance = this;
+            if (!UnityEngine.XR.XRSettings.isDeviceActive && simulatorFrameRateCap > 0)
+            {
+                QualitySettings.vSyncCount = 0;
+                Application.targetFrameRate = simulatorFrameRateCap;
+            }
         }
 
         void OnDestroy()

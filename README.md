@@ -10,7 +10,7 @@ Scene: `Assets/Handball/Scenes/Handball.unity` (first scene in Build Settings).
 
 **Demo video:** [`video.mp4`](video.mp4) (recorded in the Editor with the XR Interaction Simulator).
 
-## ⚠️ Important: two throwing modes
+## Important: two throwing modes
 
 The game supports **both** a real physical throw and a simulator-friendly throw. It picks the right one
 automatically (`HandballThrowAssist`, on each controller):

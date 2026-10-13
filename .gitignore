@@ -23,6 +23,10 @@
 /[Uu]ser[Ss]ettings/
 *.log
 
+# Scene backups Unity writes after an Editor crash.
+/[Aa]ssets/_Recovery/
+/[Aa]ssets/_Recovery.meta
+
 # By default unity supports Blender asset imports, *.blend1 blender files do not need to be commited to version control.
 *.blend1
 *.blend1.meta

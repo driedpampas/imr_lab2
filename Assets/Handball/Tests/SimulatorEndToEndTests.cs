@@ -49,14 +49,15 @@ namespace Handball.Tests
                 m_Simulator = Object.Instantiate(prefab);
             }
 #endif
-            m_Keyboard = InputSystem.GetDevice<Keyboard>() ?? InputSystem.AddDevice<Keyboard>();
+            // A keyboard of our own: the machine's real one is disabled while the Editor is unfocused or in batch mode.
+            m_Keyboard = InputSystem.AddDevice<Keyboard>("Simulator Test Keyboard");
             yield return new WaitForSeconds(1.2f); // let the simulator spawn devices and the modality manager show the controllers
         }
 
         [TearDown]
         public void TearDown()
         {
-            Release();
+            if (m_Keyboard != null) InputSystem.RemoveDevice(m_Keyboard);
             if (m_Simulator) Object.Destroy(m_Simulator);
             InputSystem.settings.backgroundBehavior = m_PrevBackground;
             InputSystem.settings.editorInputBehaviorInPlayMode = m_PrevEditor;

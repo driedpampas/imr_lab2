@@ -387,6 +387,7 @@ namespace Handball.EditorTools
                 var assist = controller.gameObject.AddComponent<HandballThrowAssist>();
                 assist.aimSource = camera.transform;
             }
+            HandballHands.Attach(rigGo);
 
             new GameObject("XR Interaction Manager").AddComponent<XRInteractionManager>();
             var es = new GameObject("EventSystem");
@@ -704,6 +705,7 @@ namespace Handball.EditorTools
             emoteGo.transform.position = GoalPosition + new Vector3(0f, 1.9f, -0.7f);
             bubble.gameObject.SetActive(false);
             keeper.dizzy = dizzy;
+            HandballHands.AttachReactions(keeper);
         }
 
         static void ApplyUnityChanMaterials(GameObject model)

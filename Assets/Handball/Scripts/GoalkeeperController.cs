@@ -11,7 +11,8 @@ namespace Handball
     [DefaultExecutionOrder(50)]
     public class GoalkeeperController : MonoBehaviour
     {
-        public enum State { Idle, Blocking, Diving, Down, GettingUp, Returning, Celebrating }
+        public enum State { Idle, Blocking, Diving, Down, GettingUp, Returning, Celebrating, Reacting }
+        public enum ReactionArm { None, Raise, Wave }
 
         [Header("References")]
         public Animator animator;
@@ -58,12 +59,20 @@ namespace Handball
         public float returnSpeed = 2.4f;
         [Range(0f, 1f)] public float celebrateChance = 0.6f;
 
+        [Header("Reacting to the player's hand signs")]
+        [Tooltip("Extra reaction time when a shot comes while she is busy answering a hand sign.")]
+        public float distractedDelay = 0.1f;
+        [Tooltip("Reaction time and hand speed multipliers while she is fired up (after being insulted).")]
+        public float firedUpReaction = 0.7f;
+        public float firedUpSpeed = 1.2f;
+
         static readonly int s_Idle = Animator.StringToHash("Idle");
         static readonly int s_Celebrate = Animator.StringToHash("RisingPunch");
         static readonly int s_FistPump = Animator.StringToHash("Jab");
 
         public State CurrentState => m_State;
-        public bool CanReact => m_State == State.Idle || m_State == State.Returning;
+        public bool CanReact => m_State == State.Idle || m_State == State.Returning || m_State == State.Reacting;
+        public bool IsFiredUp => Time.time < m_FiredUpUntil;
 
         State m_State = State.Idle;
         float m_StateTime;
@@ -86,6 +95,13 @@ namespace Handball
         Vector3 m_LeftHandGoal, m_RightHandGoal;
         Vector3 m_LookPoint;
         float m_LookWeight = 1f;
+
+        // Answering a hand sign
+        ReactionArm m_ReactionArm;
+        bool m_ReactionDowncast;
+        float m_ArmWeight;
+        Vector3 m_ArmGoal;
+        float m_FiredUpUntil = -1f;
 
         // Get-up blending
         Quaternion[] m_CapturedLocal;
@@ -187,6 +203,12 @@ namespace Handball
 
             float reaction = reactionTime + Random.value * reactionJitter;
             float speed = handSpeed;
+            if (m_State == State.Reacting) reaction += distractedDelay;
+            if (IsFiredUp)
+            {
+                reaction *= firedUpReaction;
+                speed *= firedUpSpeed;
+            }
             if (Random.value < superSaveChance)
             {
                 reaction *= 0.65f;
@@ -280,6 +302,41 @@ namespace Handball
             m_PlanEnd = Time.time + (big ? 1.1f : 0.55f);
         }
 
+        // ------------------------------------------------------------------ hand signs
+
+        /// <summary>
+        /// Starts a short reaction to something the player did: an optional animator state, an optional gesture of
+        /// her right arm, and looking at the player (or at the ground). She only does this while standing idle, and
+        /// a shot still interrupts it. Returns false when she is busy.
+        /// </summary>
+        public bool BeginReaction(float duration, string animatorState, ReactionArm arm, bool downcast)
+        {
+            if (m_State != State.Idle) return false;
+            m_ReactionArm = arm;
+            m_ReactionDowncast = downcast;
+            m_HandWeight = 0f;
+            if (!string.IsNullOrEmpty(animatorState)) animator.CrossFadeInFixedTime(animatorState, 0.12f);
+            SetState(State.Reacting);
+            m_PlanEnd = Time.time + duration;
+            return true;
+        }
+
+        /// <summary>Makes her quicker for a while.</summary>
+        public void FireUp(float seconds)
+        {
+            m_FiredUpUntil = Mathf.Max(m_FiredUpUntil, Time.time + seconds);
+        }
+
+        void TickReaction(float now)
+        {
+            // Her right hand, in her own space: held up beside her face, or swinging from side to side above it.
+            var local = m_ReactionArm == ReactionArm.Wave
+                ? new Vector3(0.34f + 0.13f * Mathf.Sin(m_StateTime * 15f), 1.58f, 0.2f)
+                : new Vector3(0.3f, 1.42f, 0.3f);
+            m_ArmGoal = transform.TransformPoint(local);
+            if (now >= m_PlanEnd) SetState(State.Idle);
+        }
+
         /// <summary>Instantly puts her back in goal, standing and ready (tests / restarting a round).</summary>
         public void ResetToHome()
         {
@@ -290,6 +347,8 @@ namespace Handball
             m_HandWeight = 0f;
             transform.SetPositionAndRotation(HomePosition, HomeRotation);
             if (dizzy) dizzy.Show(false);
+            m_ArmWeight = 0f;
+            m_FiredUpUntil = -1f;
             SetState(State.Idle);
         }
 
@@ -301,6 +360,8 @@ namespace Handball
             float now = Time.time;
             ragdoll.TrackPose();
             UpdateLookTarget();
+            bool armUp = m_State == State.Reacting && m_ReactionArm != ReactionArm.None;
+            m_ArmWeight = Mathf.MoveTowards(m_ArmWeight, armUp ? 1f : 0f, Time.fixedDeltaTime * 5f);
 
             switch (m_State)
             {
@@ -328,6 +389,10 @@ namespace Handball
                 case State.Celebrating:
                     if (now >= m_PlanEnd) SetState(State.Idle);
                     break;
+
+                case State.Reacting:
+                    TickReaction(now);
+                    break;
             }
         }
 
@@ -348,7 +413,9 @@ namespace Handball
         void UpdateLookTarget()
         {
             Vector3 target;
-            if (m_TrackedBall && !m_TrackedBall.IsOnRack)
+            if (m_State == State.Reacting)
+                target = m_ReactionDowncast || !lookAtFallback ? transform.position + transform.forward * 0.9f + Vector3.up * 0.4f : lookAtFallback.position;
+            else if (m_TrackedBall && !m_TrackedBall.IsOnRack)
                 target = m_TrackedBall.transform.position;
             else if (lookAtFallback)
                 target = lookAtFallback.position;
@@ -554,11 +621,15 @@ namespace Handball
             animator.SetLookAtPosition(m_LookPoint);
 
             animator.SetIKPositionWeight(AvatarIKGoal.LeftHand, m_HandWeight);
-            animator.SetIKPositionWeight(AvatarIKGoal.RightHand, m_HandWeight);
+            animator.SetIKPositionWeight(AvatarIKGoal.RightHand, Mathf.Max(m_HandWeight, m_ArmWeight));
             if (m_HandWeight > 0f)
             {
                 animator.SetIKPosition(AvatarIKGoal.LeftHand, m_LeftHandGoal);
                 animator.SetIKPosition(AvatarIKGoal.RightHand, m_RightHandGoal);
+            }
+            else if (m_ArmWeight > 0f)
+            {
+                animator.SetIKPosition(AvatarIKGoal.RightHand, m_ArmGoal);
             }
 
             // Keep the feet planted while crouching for a low block.

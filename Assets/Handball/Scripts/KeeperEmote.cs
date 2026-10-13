@@ -6,7 +6,7 @@ namespace Handball
     /// <summary>A little speech bubble above Unity-chan's head that pops in, wobbles and fades.</summary>
     public class KeeperEmote : MonoBehaviour
     {
-        public enum Mood { Neutral, Happy, Sad }
+        public enum Mood { Neutral, Happy, Sad, Angry }
 
         public TMP_Text label;
         public Transform bubble;
@@ -16,6 +16,7 @@ namespace Handball
         public Color neutralColor = new Color(0.25f, 0.25f, 0.35f);
         public Color happyColor = new Color(0.95f, 0.35f, 0.55f);
         public Color sadColor = new Color(0.3f, 0.45f, 0.85f);
+        public Color angryColor = new Color(0.9f, 0.22f, 0.15f);
 
         float m_Time = 99f;
 
@@ -28,7 +29,7 @@ namespace Handball
         {
             if (!label || !bubble) return;
             label.text = text;
-            label.color = mood switch { Mood.Happy => happyColor, Mood.Sad => sadColor, _ => neutralColor };
+            label.color = mood switch { Mood.Happy => happyColor, Mood.Sad => sadColor, Mood.Angry => angryColor, _ => neutralColor };
             m_Time = 0f;
             bubble.gameObject.SetActive(true);
         }

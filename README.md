@@ -68,6 +68,98 @@ press Play, grab a ball with the **grip** button of either hand and throw it for
 always saved, well-placed corner shots go in about 2 out of 3 times (she sometimes pulls off a
 super save), and the time she is down after a dive is a free window.
 
+## Lab 3: hands modelled in Blender
+
+Both controllers now carry a hand modelled in Blender instead of the controller model.
+
+![The hand model](Blender/previews/hand.jpg)
+
+| UV islands (seams in red) | Checker texture: even squares, no stretching |
+| --- | --- |
+| ![UV layout](Blender/previews/uv_layout.png) | ![UV checker](Blender/previews/uv_checker.jpg) |
+
+In the game, on both controllers (open hand, Grab, Trigger, and both on the left hand):
+
+![The hands in the game](Docs/images/hands_in_game.jpg)
+
+The Grab and Trigger animations in Blender (rows: Grab, Trigger, both):
+
+![Grab and Trigger animations](Blender/previews/animations.jpg)
+
+- **Model**: a five-finger left hand with nails and a sweatband at the wrist, about 10k quads
+  (no triangles or n-gons, watertight). It is built by `Blender/make_hand.py`, a Blender Python
+  script that lays out a quad control cage, subdivides it, shapes the nails, unwraps, paints the
+  texture, rigs and animates the hand, then saves `Blender/hand.blend` and exports the FBX.
+  Regenerate everything with `blender -b --factory-startup --python Blender/make_hand.py`.
+- **UV unwrap**: seams run along the sides of the hand and fingers, giving three islands: back of
+  the hand, palm, and the end of the wrist. Texel density stays within about 12% of the median
+  over 90% of the surface and the mean angle error is 3 degrees, so a checker texture shows no
+  visible stretching.
+- **Texture**: `Assets/Handball/Hands/HandSkin.png` (2048x2048), painted by the script from each
+  texel's position on the model, so it is continuous across the seams: skin tones, knuckle
+  wrinkles, palm and finger creases, nails and the sweatband.
+- **In Unity**: `Assets/Handball/Hands/Hand.fbx` is attached under *Left Controller* and
+  *Right Controller* by **Handball > Setup > Attach Hands To Scene** (also part of
+  **Handball > Build Scene**). The right hand is the same model under a parent scaled to -1 on X.
+- **Animations**: the FBX carries clips made in Blender. **Grab** curls the middle, ring and
+  little finger; **Trigger** curls the index finger. `HandAnimator` plays Grab from the
+  controller's grip value and Trigger from its trigger value, on two animator layers so they can
+  overlap. Six more clips are hand signs (next section).
+
+| Action | Headset | XR Interaction Simulator |
+| --- | --- | --- |
+| Grab animation | grip button | **G** (left hand: **Shift + G**) |
+| Trigger animation | trigger | **T** (left hand: **Shift + T**) |
+
+| Lab 3 requirement | Where |
+| --- | --- |
+| Model a hand with 5 fingers (6p) | `Blender/hand.blend`, built by `Blender/make_hand.py` |
+| UV unwrap + texture (2p) | seams and unwrap in `make_hand.py`; `Assets/Handball/Hands/HandSkin.png` |
+| Hand on both controllers, right one scaled -1 on X (2p) | `HandballHands` (Editor), `Left Hand` / `Right Hand` under the controllers |
+| Grab and Trigger animations on the controller actions (bonus 2p) | `Grab` / `Trigger` clips in `Hand.fbx`, `HandAnimator`, `Assets/Handball/Generated/AC_Hand.controller` |
+| Creativity (bonus 1p) | hand signs that Unity-chan answers: `HandGestures`, `KeeperGestureReactions`, `KeeperFace` |
+
+`Assets/Handball/Tests/HandTests.cs` checks all of this in Play mode through the simulator.
+
+### Hand signs: Unity-chan reacts to you
+
+With an empty hand you can show Unity-chan a sign and she answers it. The signs are six more
+animations of the same Blender hand:
+
+![Hand signs in Blender](Blender/previews/gestures.jpg)
+
+![Hand signs in the game and Unity-chan's answers](Docs/images/hand_signs_in_game.jpg)
+
+**Video:** [`hand_signs.mp4`](hand_signs.mp4) shows all six signs and her answers (split screen,
+no sound; filmed by the `Debug_RecordHandSigns` test in `HandTests.cs`).
+
+| Sign | Headset | Simulator | Unity-chan |
+| --- | --- | --- | --- |
+| Thumbs up | primary button (A / X) | **1** | smiles and raises her hand: "Thanks~!" |
+| Thumbs down | primary button with the hand turned over | **N** | sulks and looks at the ground: "So mean..." |
+| Peace | secondary button (B / Y) | **2** | poses back: "Peace~!" |
+| Rock | primary + secondary | **1 + 2** | jumps: "Rock on!" |
+| Middle finger | thumbstick click | **3** | gets angry ("How rude!") and stays **fired up for 12 s**: quicker reactions and faster hands, so insulting her makes her harder to beat |
+| Wave | wave your open, raised hand | **B** | waves back: "Hi hi~!" |
+
+In the simulator add **Shift** for the left hand, as with G and T. She only answers when she is
+standing ready and you are looking her way, once per sign, and a shot interrupts her; while she
+is answering she reacts to a shot 0.1 s later. A thumb sign is read from where the thumb actually
+points, so turning your hand over really does turn a thumbs up into a thumbs down.
+
+`HandGestures` reads the buttons and blends the sign in on a third animator layer;
+`KeeperGestureReactions` picks her answer (speech bubble, facial expression through her blend
+shapes in `KeeperFace`, an arm gesture or animation, a sound). The headset bindings and the
+motion-based wave follow the same code path as the simulator keys but have not been tried on a
+physical headset.
+
+### Working on Linux
+
+Unity's OpenXR plugin has no Linux runtime, so on Linux the game runs in the Editor with the
+XR Interaction Simulator: pressing Play logs one OpenXR error and carries on. For a standalone
+build use **Handball > Build > Linux Test Build (simulator, no OpenXR)**; it leaves the OpenXR
+settings used on Windows untouched.
+
 ## Rubric mapping
 
 | Requirement | Where |

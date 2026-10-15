@@ -1,10 +1,12 @@
 # Handball with Unity-chan (IMR Lab 2/3)
+Alexandru Bianca, Gurzu Matei
 
 AI was used for:
 - help with implementation
 - help with debugging Unity errors
 - help guiding the 3D modelling process
 - enhancing the texture of the 3d model
+- wrote the readme
 
 A VR throwing game built with **OpenXR + XR Interaction Toolkit 3.3** in Unity 6 (6000.3.25f1).
 You stand on the 7 m line of a sunny, toy-like field. Grab a handball from the floating racks

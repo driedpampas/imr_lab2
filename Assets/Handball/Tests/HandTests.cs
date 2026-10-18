@@ -363,68 +363,238 @@ namespace Handball.Tests
         // ------------------------------------------------------------------ recording
 
         /// <summary>
-        /// Films every hand sign and Unity-chan's answer as numbered frames in Logs/recording (the player's view and
-        /// a camera on her), at a fixed 30 frames per second of game time. Run it by name; it is skipped otherwise.
+        /// Films a few cameras as numbered frames in a folder (one "{tag}_{frame}.jpg" per camera and frame) at a
+        /// fixed 30 frames per second of game time, plus a captions.tsv saying from which frame each caption shows.
+        /// The videos in the README are put together from these frames.
         /// </summary>
-        [UnityTest, Explicit]
-        public IEnumerator Debug_RecordHandSigns()
+        sealed class Recorder
         {
-            const string dir = "Logs/recording";
-            if (Directory.Exists(dir)) Directory.Delete(dir, true);
-            Directory.CreateDirectory(dir);
-            var hand = Hand("Right");
-            var keeper = Object.FindFirstObjectByType<GoalkeeperController>();
-            var head = Camera.main.transform;
+            readonly string m_Dir;
+            readonly System.Collections.Generic.List<(Camera cam, string tag, Texture2D tex)> m_Cameras = new();
+            readonly System.Text.StringBuilder m_Captions = new();
 
-            Camera Film(string name, float fov)
+            public int Frame { get; private set; }
+            /// <summary>Called before every frame, to move the cameras.</summary>
+            public System.Action BeforeShot;
+
+            public Recorder(string dir)
             {
-                var cam = new GameObject(name).AddComponent<Camera>();
+                m_Dir = dir;
+                if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                Directory.CreateDirectory(dir);
+                Time.captureFramerate = 30;
+                Caption("");
+            }
+
+            public Camera Film(string tag, int width, int height, float fov)
+            {
+                var cam = new GameObject("Recording " + tag).AddComponent<Camera>();
                 cam.CopyFrom(Camera.main);
                 cam.stereoTargetEye = StereoTargetEyeMask.None;
                 cam.fieldOfView = fov;
                 cam.nearClipPlane = 0.02f;
-                cam.targetTexture = new RenderTexture(640, 720, 24);
+                cam.targetTexture = new RenderTexture(width, height, 24);
                 cam.enabled = false;
+                m_Cameras.Add((cam, tag, new Texture2D(width, height, TextureFormat.RGB24, false)));
                 return cam;
             }
-            var playerCam = Film("Recording Player", 62f);
-            var keeperCam = Film("Recording Keeper", 38f);
-            var herFocus = keeper.transform.position + Vector3.up * 1.35f;
-            keeperCam.transform.position = herFocus + keeper.transform.forward * 3.6f + keeper.transform.right * 0.45f;
-            keeperCam.transform.rotation = Quaternion.LookRotation(herFocus - keeperCam.transform.position, Vector3.up);
-            var tex = new Texture2D(640, 720, TextureFormat.RGB24, false);
-            var captions = new System.Text.StringBuilder();
-            int frame = 0;
 
-            void Shoot()
+            public void Caption(string text) => m_Captions.AppendLine($"{Frame}\t{text}");
+
+            public void Shoot()
             {
-                // Look past the right hand at the goal, so both the sign and her answer are in the player's shot.
-                var toHand = (hand.transform.parent.position + Vector3.up * 0.12f - head.position).normalized;
-                playerCam.transform.SetPositionAndRotation(head.position, Quaternion.LookRotation(head.forward * 0.55f + toHand * 0.45f, Vector3.up));
-                foreach (var (cam, tag) in new[] { (playerCam, "player"), (keeperCam, "keeper") })
+                BeforeShot?.Invoke();
+                foreach (var (cam, tag, tex) in m_Cameras)
                 {
                     cam.Render();
                     var prev = RenderTexture.active;
                     RenderTexture.active = cam.targetTexture;
-                    tex.ReadPixels(new Rect(0, 0, 640, 720), 0, 0);
+                    tex.ReadPixels(new Rect(0, 0, tex.width, tex.height), 0, 0);
                     tex.Apply();
                     RenderTexture.active = prev;
-                    File.WriteAllBytes($"{dir}/{tag}_{frame:D5}.jpg", tex.EncodeToJPG(92));
+                    File.WriteAllBytes($"{m_Dir}/{tag}_{Frame:D5}.jpg", tex.EncodeToJPG(92));
                 }
-                frame++;
+                Frame++;
             }
 
-            IEnumerator Roll(float seconds, params Key[] keys)
+            public void Finish()
             {
-                for (float end = Time.time + seconds; Time.time < end;)
+                Time.captureFramerate = 0;
+                File.WriteAllText($"{m_Dir}/captions.tsv", m_Captions.ToString());
+                Debug.Log($"RECORDING: {Frame} frames in {m_Dir}");
+                foreach (var (cam, _, tex) in m_Cameras)
                 {
-                    Hold(keys);
-                    yield return null;
-                    Shoot();
+                    var rt = cam.targetTexture;
+                    cam.targetTexture = null;
+                    Object.Destroy(rt);
+                    Object.Destroy(cam.gameObject);
+                    Object.Destroy(tex);
                 }
             }
+        }
 
-            Time.captureFramerate = 30;
+        /// <summary>Holds the keys for a while (at least one frame), filming every frame.</summary>
+        IEnumerator Roll(Recorder recorder, float seconds, params Key[] keys)
+        {
+            var end = Time.time + seconds;
+            do
+            {
+                Hold(keys);
+                yield return null;
+                recorder.Shoot();
+            } while (Time.time < end);
+        }
+
+        /// <summary>A camera on the thumb side of the hand, looking along the palm so every finger's curl shows in profile.</summary>
+        static void SideOn(Camera cam, HandAnimator hand, bool leftHand)
+        {
+            var head = Camera.main.transform;
+            var controller = hand.transform.parent.parent;
+            var target = controller.position + controller.forward * 0.07f;
+            var towardsThumb = leftHand ? head.right : -head.right;
+            var position = target + towardsThumb * 0.30f + head.forward * 0.13f + Vector3.up * 0.10f;
+            cam.transform.SetPositionAndRotation(position, Quaternion.LookRotation(target - position, Vector3.up));
+        }
+
+        /// <summary>
+        /// Films the Grab and Trigger animations as the simulator's G and T keys play them (Shift for the left hand):
+        /// both hands from the front, and the hand that moves from its thumb side. Run it by name; it is skipped otherwise.
+        /// </summary>
+        [UnityTest, Explicit]
+        public IEnumerator Debug_RecordGrabAndTrigger()
+        {
+            var left = Hand("Left");
+            var right = Hand("Right");
+            var head = Camera.main.transform;
+            var recorder = new Recorder("Logs/recording_fingers");
+            var frontCam = recorder.Film("front", 640, 720, 48f);
+            var sideCam = recorder.Film("side", 640, 720, 36f);
+            var filmLeft = false;
+            recorder.BeforeShot = () =>
+            {
+                var middle = (left.transform.parent.parent.position + right.transform.parent.parent.position) * 0.5f + head.forward * 0.05f;
+                var position = middle + head.forward * 0.42f + Vector3.up * 0.16f;
+                frontCam.transform.SetPositionAndRotation(position, Quaternion.LookRotation(middle - position, Vector3.up));
+                SideOn(sideCam, filmLeft ? left : right, filmLeft);
+            };
+
+            var takes = new (string caption, Key[] keys, bool leftHand)[]
+            {
+                ("Grab  -  G", new[] { Key.G }, false),
+                ("Trigger  -  T", new[] { Key.T }, false),
+                ("Grab + Trigger  -  G + T", new[] { Key.G, Key.T }, false),
+                ("Left hand: Grab  -  Shift + G", new[] { Key.LeftShift, Key.G }, true),
+                ("Left hand: Trigger  -  Shift + T", new[] { Key.LeftShift, Key.T }, true),
+                ("Left hand: both  -  Shift + G + T", new[] { Key.LeftShift, Key.G, Key.T }, true),
+            };
+            yield return Roll(recorder, 0.8f);
+            foreach (var (caption, keys, leftHand) in takes)
+            {
+                filmLeft = leftHand;
+                recorder.Caption(caption);
+                yield return Roll(recorder, 1.6f, keys);
+                // Let go of the buttons before Shift, so the left hand gets the release too.
+                yield return Roll(recorder, 0.2f, leftHand ? new[] { Key.LeftShift } : new Key[0]);
+                yield return Roll(recorder, 0.7f);
+                recorder.Caption("");
+                yield return Roll(recorder, 0.3f);
+            }
+            recorder.Finish();
+            Assert.Less(left.Grip + left.Trigger + right.Grip + right.Trigger, 0.01f, "Both hands should be open again");
+        }
+
+        /// <summary>
+        /// Films the player grabbing a ball off the rack with the right hand (G), carrying it to the goal and
+        /// throwing it by letting go: the player's view and a camera following the hand. Run it by name.
+        /// </summary>
+        [UnityTest, Explicit]
+        public IEnumerator Debug_RecordBallGrab()
+        {
+            var hand = Hand("Right");
+            var controller = hand.transform.parent.parent;
+            var interactor = controller.GetComponentInChildren<UnityEngine.XR.Interaction.Toolkit.Interactors.NearFarInteractor>();
+            var game = HandballGame.Instance;
+            var head = Camera.main.transform;
+            var recorder = new Recorder("Logs/recording_ball");
+            var playerCam = recorder.Film("player", 1280, 720, 60f);
+            var handCam = recorder.Film("hand", 480, 480, 42f);
+            HandballBall held = null;
+            recorder.BeforeShot = () =>
+            {
+                // Look a little down towards the hand, so it stays in the player's shot.
+                var toHand = (controller.position - head.position).normalized;
+                playerCam.transform.SetPositionAndRotation(head.position, Quaternion.LookRotation(head.forward * 0.8f + toHand * 0.2f, Vector3.up));
+                var target = held && held.IsHeld ? held.transform.position : controller.position + controller.forward * 0.06f;
+                var position = target - head.right * 0.22f + head.forward * 0.26f + Vector3.up * 0.12f;
+                handCam.transform.SetPositionAndRotation(position, Quaternion.LookRotation(target - position, Vector3.up));
+            };
+
+            HandballBall Target()
+            {
+                var targets = new System.Collections.Generic.List<UnityEngine.XR.Interaction.Toolkit.Interactables.IXRInteractable>();
+                interactor.GetValidTargets(targets);
+                return targets.Select(t => (t as Component)?.GetComponent<HandballBall>()).FirstOrDefault(b => b && b.IsOnRack);
+            }
+            static float Yaw(Vector3 forward) => Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
+
+            yield return Roll(recorder, 0.8f);
+            recorder.Caption("Turn to the ball rack  -  arrow keys");
+            for (int i = 0; i < 600 && Target() == null; i++) yield return Roll(recorder, 0f, Key.RightArrow);
+            var ball = Target();
+            Assert.IsNotNull(ball, "Turning towards the rack should put a ball under the controller ray");
+            yield return Roll(recorder, 0.5f);
+
+            recorder.Caption("Grab  -  G");
+            held = ball;
+            yield return Roll(recorder, 1.4f, Key.G);
+            Assert.IsTrue(ball.IsHeld, "Pressing G should grab the ball");
+
+            recorder.Caption("Hold G and turn to the goal");
+            var aimPoint = game.goal.TransformPoint(new Vector3(1.1f, 1.5f, 0f));
+            float wantedYaw = Yaw(aimPoint - head.position);
+            for (int i = 0; i < 900 && Mathf.Abs(Mathf.DeltaAngle(Yaw(head.forward), wantedYaw)) > 0.3f; i++)
+                yield return Roll(recorder, 0f, Key.G, Mathf.DeltaAngle(Yaw(head.forward), wantedYaw) > 0 ? Key.RightArrow : Key.LeftArrow);
+            float wantedPitch = -Mathf.Asin((aimPoint - head.position).normalized.y) * Mathf.Rad2Deg;
+            for (int i = 0; i < 600 && Mathf.Abs(Mathf.DeltaAngle(0f, head.eulerAngles.x) - wantedPitch) > 0.3f; i++)
+                yield return Roll(recorder, 0f, Key.G, Mathf.DeltaAngle(0f, head.eulerAngles.x) > wantedPitch ? Key.UpArrow : Key.DownArrow);
+            yield return Roll(recorder, 0.6f, Key.G);
+            Assert.IsTrue(ball.IsHeld, "The ball should still be in the hand while aiming");
+
+            recorder.Caption("Throw  -  let go of G");
+            yield return Roll(recorder, 0.3f);
+            Assert.IsFalse(ball.IsHeld, "Letting go of G should throw the ball");
+            var shot = ball.CurrentShot;
+            Assert.IsNotNull(shot);
+            for (float t = 0f; shot.result == ShotResult.Pending && t < 6f; t += Time.deltaTime) yield return Roll(recorder, 0f);
+            recorder.Caption(shot.result == ShotResult.Goal ? "Goal!" : shot.result == ShotResult.Save ? "Saved by Unity-chan!" : "Missed");
+            yield return Roll(recorder, 2f);
+            recorder.Finish();
+            Debug.Log($"BALL RECORDING: {shot.result}");
+        }
+
+        /// <summary>
+        /// Films every hand sign and Unity-chan's answer as numbered frames in Logs/recording (the player's view and
+        /// a camera on her). Run it by name; it is skipped otherwise.
+        /// </summary>
+        [UnityTest, Explicit]
+        public IEnumerator Debug_RecordHandSigns()
+        {
+            var hand = Hand("Right");
+            var keeper = Object.FindFirstObjectByType<GoalkeeperController>();
+            var head = Camera.main.transform;
+            var recorder = new Recorder("Logs/recording");
+            var playerCam = recorder.Film("player", 640, 720, 62f);
+            var keeperCam = recorder.Film("keeper", 640, 720, 38f);
+            var herFocus = keeper.transform.position + Vector3.up * 1.35f;
+            keeperCam.transform.position = herFocus + keeper.transform.forward * 3.6f + keeper.transform.right * 0.45f;
+            keeperCam.transform.rotation = Quaternion.LookRotation(herFocus - keeperCam.transform.position, Vector3.up);
+            recorder.BeforeShot = () =>
+            {
+                // Look past the right hand at the goal, so both the sign and her answer are in the player's shot.
+                var toHand = (hand.transform.parent.position + Vector3.up * 0.12f - head.position).normalized;
+                playerCam.transform.SetPositionAndRotation(head.position, Quaternion.LookRotation(head.forward * 0.55f + toHand * 0.45f, Vector3.up));
+            };
+
             var takes = new (string caption, Key[] keys)[]
             {
                 ("Wave  -  B", new[] { Key.B }),
@@ -434,29 +604,17 @@ namespace Handball.Tests
                 ("Thumbs down  -  N", new[] { Key.N }),
                 ("Middle finger  -  3", new[] { Key.Digit3 }),
             };
-            captions.AppendLine("0\t");
-            yield return Roll(1.0f);
+            yield return Roll(recorder, 1.0f);
             foreach (var (caption, keys) in takes)
             {
-                captions.AppendLine($"{frame}\t{caption}");
-                yield return Roll(2.3f, keys);
-                yield return Roll(0.4f);
-                captions.AppendLine($"{frame}\t");
-                for (float end = Time.time + 4f; Time.time < end && keeper.CurrentState != GoalkeeperController.State.Idle;) yield return Roll(0.05f);
-                yield return Roll(0.9f);
+                recorder.Caption(caption);
+                yield return Roll(recorder, 2.3f, keys);
+                yield return Roll(recorder, 0.4f);
+                recorder.Caption("");
+                for (float end = Time.time + 4f; Time.time < end && keeper.CurrentState != GoalkeeperController.State.Idle;) yield return Roll(recorder, 0.05f);
+                yield return Roll(recorder, 0.9f);
             }
-            Time.captureFramerate = 0;
-            File.WriteAllText($"{dir}/captions.tsv", captions.ToString());
-            Debug.Log($"HAND SIGN RECORDING: {frame} frames in {dir}");
-
-            foreach (var cam in new[] { playerCam, keeperCam })
-            {
-                var rt = cam.targetTexture;
-                cam.targetTexture = null;
-                Object.Destroy(rt);
-                Object.Destroy(cam.gameObject);
-            }
-            Object.Destroy(tex);
+            recorder.Finish();
         }
     }
 }

@@ -119,12 +119,23 @@ The Grab and Trigger animations in Blender (rows: Grab, Trigger, both):
 | Grab animation | grip button | **G** (left hand: **Shift + G**) |
 | Trigger animation | trigger | **T** (left hand: **Shift + T**) |
 
+**Videos** (no sound; filmed by the `Debug_RecordGrabAndTrigger` and `Debug_RecordBallGrab` tests
+in `HandTests.cs`):
+
+- [`hand_grab_trigger.mp4`](hand_grab_trigger.mp4): Grab, Trigger and both together, on the right
+  hand and then the left. One side shows both hands from the front (mirrored, so your right hand is
+  on the right), the other a close-up of the hand that moves.
+- [`hand_ball_grab.mp4`](hand_ball_grab.mp4): the hand grabs a ball off the rack (**G**), carries it
+  to the goal and throws it in by letting go, with a close-up of the fingers around the ball. The
+  turn back to the goal plays at 3x speed.
+
 | Lab 3 requirement | Where |
 | --- | --- |
 | Model a hand with 5 fingers (6p) | `Blender/hand.blend`, built by `Blender/make_hand.py` |
 | UV unwrap + texture (2p) | seams and unwrap in `make_hand.py`; `Assets/Handball/Hands/HandSkin.png` |
+| Export as FBX | `Assets/Handball/Hands/Hand.fbx`, exported by `make_hand.py` |
 | Hand on both controllers, right one scaled -1 on X (2p) | `HandballHands` (Editor), `Left Hand` / `Right Hand` under the controllers |
-| Grab and Trigger animations on the controller actions (bonus 2p) | `Grab` / `Trigger` clips in `Hand.fbx`, `HandAnimator`, `Assets/Handball/Generated/AC_Hand.controller` |
+| Grab and Trigger animations on the controller actions (bonus 2p) | `Grab` / `Trigger` clips in `Hand.fbx`, `HandAnimator`, `Assets/Handball/Generated/AC_Hand.controller`; videos `hand_grab_trigger.mp4`, `hand_ball_grab.mp4` |
 | Creativity (bonus 1p) | hand signs that Unity-chan answers: `HandGestures`, `KeeperGestureReactions`, `KeeperFace` |
 
 `Assets/Handball/Tests/HandTests.cs` checks all of this in Play mode through the simulator.
